@@ -1,85 +1,75 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Image Generator Demo</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>KI Bildgenerator Demo</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <header>
-            <div class="language-switcher">
-                <a href="/" class="lang-btn active">🇺🇸 English</a>
-                <a href="/de/" class="lang-btn">🇩🇪 Deutsch</a>
+            <div class="language-toggle">
+                <button id="lang-de" class="lang-btn active">DE</button>
+                <button id="lang-en" class="lang-btn">EN</button>
             </div>
-            <h1>🎨 AI Image Generator</h1>
-            <p>Create stunning images from text descriptions using advanced AI technology</p>
+            <h1 id="main-title">KI Bildgenerator Demo</h1>
+            <p id="subtitle">Erleben Sie die Kraft der Künstlichen Intelligenz bei der Bilderzeugung</p>
         </header>
 
-        <div class="main-content">
+        <main>
             <div class="input-section">
-                <h2>Describe Your Image</h2>
-                <div class="example-buttons">
-                    <button class="example-btn" onclick="loadExample(1)">🎨 Deutsche Welle Logo (Van Gogh Style)</button>
-                    <button class="example-btn" onclick="loadExample(2)">🐱 Cat Rollerblading in Berlin</button>
-                    <button class="example-btn" onclick="loadExample(3)">🍃 Pope & Dalai Lama Tea Time</button>
-                    <button class="clear-btn" onclick="clearText()">🗑️ Clear All</button>
+                <div class="form-group">
+                    <label for="prompt-input" id="input-label">Beschreiben Sie das Bild, das Sie erstellen möchten:</label>
+                    <textarea 
+                        id="prompt-input" 
+                        placeholder="z.B. Ein majestätischer Löwe in einer afrikanischen Savanne bei Sonnenuntergang..."
+                        rows="4"
+                    ></textarea>
                 </div>
-                <textarea id="inputText" placeholder="Describe the image you want to create. Be specific and creative! Example: 'A majestic dragon flying over a medieval castle at sunset, digital art style'"></textarea>
-                <div class="generation-controls">
-                    <button class="generate-btn" onclick="generateImage()" id="generateBtn">
-                        🎨 Generate Image
-                    </button>
-                    <div class="quality-selector">
-                        <label for="qualitySelect">Quality:</label>
-                        <select id="qualitySelect">
-                            <option value="fast">Fast (512x512)</option>
-                            <option value="standard" selected>Standard (768x768)</option>
-                            <option value="high">High Quality (1024x1024)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
 
-            <div class="output-section">
-                <h2>Generated Image</h2>
-                <div class="image-container">
-                    <div id="loadingSpinner" class="spinner" style="display: none;">
-                        <div class="spinner-circle"></div>
-                        <p>AI is creating your image...</p>
-                        <p class="loading-tip">This may take 10-30 seconds</p>
-                    </div>
-                    <div id="imageOutput" class="image-output">
-                        <div class="placeholder-image">
-                            <span>🎨</span>
-                            <p>Your generated image will appear here</p>
-                        </div>
-                    </div>
-                    <div id="imageActions" class="image-actions" style="display: none;">
-                        <button id="downloadBtn" class="action-btn" onclick="downloadImage()">
-                            💾 Download Image
+                <div class="demo-buttons" id="demo-section">
+                    <h3 id="demo-title">Oder probieren Sie diese Beispiele:</h3>
+                    <div class="button-grid">
+                        <button class="demo-btn" data-prompt="Create a logo for Deutsche Welle in the style of Vincent van Gogh, with swirling brushstrokes and vibrant colors">
+                            <span id="demo1">Deutsche Welle Logo im Van Gogh Stil</span>
                         </button>
-                        <button id="regenerateBtn" class="action-btn" onclick="regenerateImage()">
-                            🔄 Regenerate
+                        <button class="demo-btn" data-prompt="A cute cat wearing roller skates, skating down Kurfürstendamm in Berlin, with the Kaiser Wilhelm Memorial Church in the background, photorealistic">
+                            <span id="demo2">Katze auf Rollschuhen am Kurfürstendamm</span>
+                        </button>
+                        <button class="demo-btn" data-prompt="The Pope and the Dalai Lama having tea together at the top of Mount Everest, with prayer flags in the wind and a spectacular mountain view, peaceful atmosphere">
+                            <span id="demo3">Papst und Dalai Lama beim Tee im Himalaya</span>
                         </button>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <footer class="footer">
-            <div class="footer-content">
-                <h3>🤖 AI Model Information</h3>
-                <p><strong>Model:</strong> Stable Diffusion XL Base 1.0</p>
-                <p><strong>Developer:</strong> Stability AI</p>
-                <p><strong>Provider:</strong> Hugging Face Inference API</p>
-                <p><strong>Parameters:</strong> 3.5 billion parameters, specialized for high-quality image generation</p>
-                <p><strong>Version:</strong> SDXL 1.0 (July 2023) - Latest stable release</p>
-                <p><strong>Capabilities:</strong> Text-to-image generation, artistic styles, photorealistic images, creative compositions, multiple aspect ratios</p>
-                <p><strong>Limitations:</strong> Generation time: 10-30 seconds per image. Free API tier includes rate limiting during peak hours. Some content restrictions apply. Image quality depends on prompt clarity and specificity.</p>
-                <p><strong>Fallback:</strong> Demo images provided when API is unavailable to ensure consistent functionality.</p>
+                <button id="generate-btn" class="generate-button">
+                    <span id="btn-text">Bild Generieren</span>
+                    <div id="loading-spinner" class="spinner hidden"></div>
+                </button>
             </div>
+
+            <div class="result-section">
+                <div id="result-container" class="result-container hidden">
+                    <h3 id="result-title">Generiertes Bild:</h3>
+                    <div class="image-container">
+                        <img id="generated-image" alt="Generated image" />
+                        <button id="download-btn" class="download-btn">
+                            <span id="download-text">Bild herunterladen</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="error-container" class="error-container hidden">
+                    <h3 id="error-title">Fehler</h3>
+                    <p id="error-message"></p>
+                </div>
+            </div>
+        </main>
+
+        <footer>
+            <p id="footer-text">Powered by Hugging Face AI | Demo-Website für Bildgenerierung</p>
         </footer>
     </div>
 
