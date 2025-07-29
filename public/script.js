@@ -11,10 +11,14 @@ const translations = {
         demo3: "Papst und Dalai Lama beim Tee im Himalaya",
         btnText: "Bild Generieren",
         btnGenerating: "Wird generiert...",
+        progressText: "Fortschritt: {progress}% - Noch {seconds} Sekunden",
         resultTitle: "Generiertes Bild:",
         downloadText: "Bild herunterladen",
         errorTitle: "Fehler",
-        footerText: "Powered by Hugging Face AI | Demo-Website für Bildgenerierung"
+        footerText: "Powered by Hugging Face AI | Demo-Website für Bildgenerierung",
+        loadingModel: "Modell wird geladen...",
+        processingImage: "Bild wird verarbeitet...",
+        finalizingImage: "Bild wird finalisiert..."
     },
     en: {
         mainTitle: "AI Image Generator Demo",
@@ -27,14 +31,20 @@ const translations = {
         demo3: "Pope and Dalai Lama Having Tea in Himalaya",
         btnText: "Generate Image",
         btnGenerating: "Generating...",
+        progressText: "Progress: {progress}% - {seconds} seconds remaining",
         resultTitle: "Generated Image:",
         downloadText: "Download Image",
         errorTitle: "Error",
-        footerText: "Powered by Hugging Face AI | Demo Website for Image Generation"
+        footerText: "Powered by Hugging Face AI | Demo Website for Image Generation",
+        loadingModel: "Loading model...",
+        processingImage: "Processing image...",
+        finalizingImage: "Finalizing image..."
     }
 };
 
 let currentLang = 'de';
+let progressInterval;
+let startTime;
 
 // DOM Elements
 const elements = {
@@ -44,6 +54,9 @@ const elements = {
     generateBtn: document.getElementById('generate-btn'),
     btnText: document.getElementById('btn-text'),
     loadingSpinner: document.getElementById('loading-spinner'),
+    progressBar: document.getElementById('progress-bar'),
+    progressText: document.getElementById('progress-text'),
+    progressContainer: document.getElementById('progress-container'),
     resultContainer: document.getElementById('result-container'),
     errorContainer: document.getElementById('error-container'),
     generatedImage: document.getElementById('generated-image'),
@@ -116,6 +129,79 @@ function updateLanguage() {
     document.documentElement.lang = currentLang;
 }
 
+function startProgressCounter() {
+    let progress = 0;
+    const totalTime = 25; // Estimated 25 seconds for image generation
+    const updateInterval = 100; // Update every 100ms for smooth animation
+    
+    startTime = Date.now();
+    elements.progressContainer.classList.remove('hidden');
+    
+    progressInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        
+        // Calculate progress with realistic curve (slower at start, faster in middle, slower at end)
+        if (elapsed < 5) {
+            // First 5 seconds: 0-20% (model loading)
+            progress = Math.min(20, (elapsed / 5) * 20);
+        } else if (elapsed < 20) {
+            // Next 15 seconds: 20-85% (main processing)
+            progress = 20 + Math.min(65, ((elapsed - 5) / 15) * 65);
+        } else if (elapsed < totalTime) {
+            // Last 5 seconds: 85-95% (finalizing)
+            progress = 85 + Math.min(10, ((elapsed - 20) / 5) * 10);
+        } else {
+            // After expected time: stay at 95% until actual completion
+            progress = 95;
+        }
+        
+        updateProgressDisplay(progress, Math.max(0, totalTime - elapsed));
+    }, updateInterval);
+}
+
+function updateProgressDisplay(progress, remainingSeconds) {
+    const progressPercent = Math.round(progress);
+    const seconds = Math.round(remainingSeconds);
+    
+    elements.progressBar.style.width = `${progressPercent}%`;
+    
+    let statusText = '';
+    if (progressPercent < 20) {
+        statusText = translations[currentLang].loadingModel;
+    } else if (progressPercent < 85) {
+        statusText = translations[currentLang].processingImage;
+    } else {
+        statusText = translations[currentLang].finalizingImage;
+    }
+    
+    const progressText = translations[currentLang].progressText
+        .replace('{progress}', progressPercent)
+        .replace('{seconds}', Math.max(0, seconds));
+    
+    elements.progressText.innerHTML = `
+        <div class="progress-status">${statusText}</div>
+        <div class="progress-details">${progressText}</div>
+    `;
+}
+
+function stopProgressCounter() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    
+    // Show completion animation
+    elements.progressBar.style.width = '100%';
+    elements.progressText.innerHTML = `
+        <div class="progress-status">✅ ${currentLang === 'de' ? 'Fertig!' : 'Complete!'}</div>
+    `;
+    
+    // Hide progress after a short delay
+    setTimeout(() => {
+        elements.progressContainer.classList.add('hidden');
+    }, 1500);
+}
+
 async function generateImage() {
     const prompt = elements.promptInput.value.trim();
     
@@ -126,9 +212,10 @@ async function generateImage() {
         return;
     }
     
-    // Show loading state
+    // Show loading state and start progress counter
     setLoadingState(true);
     hideResults();
+    startProgressCounter();
     
     try {
         const response = await fetch('/api/generate', {
@@ -146,10 +233,13 @@ async function generateImage() {
         const blob = await response.blob();
         const imageUrl = URL.createObjectURL(blob);
         
+        // Complete the progress counter
+        stopProgressCounter();
         showResult(imageUrl);
         
     } catch (error) {
         console.error('Error generating image:', error);
+        stopProgressCounter();
         showError(currentLang === 'de' ? 
             'Fehler beim Generieren des Bildes. Bitte versuchen Sie es erneut.' : 
             'Error generating image. Please try again.');
@@ -187,6 +277,7 @@ function showError(message) {
 function hideResults() {
     elements.resultContainer.classList.add('hidden');
     elements.errorContainer.classList.add('hidden');
+    elements.progressContainer.classList.add('hidden');
 }
 
 function downloadImage() {
