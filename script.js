@@ -1,59 +1,4 @@
-// Example prompts
-const examples = {
-    1: "Deutsche Welle logo in the artistic style of Vincent van Gogh, with swirling brushstrokes, vibrant blues and yellows, post-impressionist technique, oil painting texture, professional logo design with Van Gogh's characteristic bold colors and dynamic movement",
-    2: "A cute orange tabby cat wearing protective gear, rollerblading down Kurfürstendamm in Berlin, sunny day, German architecture in background, Kaiser Wilhelm Memorial Church visible, people watching and cheering, dynamic action shot, photorealistic style",
-    3: "The Pope and the Dalai Lama sitting together peacefully having tea at a small wooden table on top of a snow-covered Himalayan mountain peak, prayer flags fluttering in the wind, breathtaking mountain vista, golden hour lighting, serene and spiritual atmosphere, photorealistic"
-};
-
-let currentImageUrl = null;
-let currentPrompt = null;
-
-// Load example text
-function loadExample(exampleNum) {
-    const inputText = document.getElementById('inputText');
-    inputText.value = examples[exampleNum];
-    inputText.style.height = 'auto';
-    inputText.style.height = inputText.scrollHeight + 'px';
-}
-
-// Clear text
-function clearText() {
-    document.getElementById('inputText').value = '';
-    document.getElementById('imageOutput').innerHTML = `
-        <div class="placeholder-image">
-            <span>🎨</span>
-            <p>Your generated image will appear here</p>
-        </div>
-    `;
-    document.getElementById('imageActions').style.display = 'none';
-    currentImageUrl = null;
-    currentPrompt = null;
-}
-
-// Show loading state
-function showLoading() {
-    document.getElementById('loadingSpinner').style.display = 'flex';
-    document.getElementById('imageOutput').style.display = 'none';
-    document.getElementById('imageActions').style.display = 'none';
-    
-    // Disable generate button
-    const generateBtn = document.getElementById('generateBtn');
-    generateBtn.disabled = true;
-    generateBtn.textContent = '🎨 Generating...';
-}
-
-// Hide loading state
-function hideLoading() {
-    document.getElementById('loadingSpinner').style.display = 'none';
-    document.getElementById('imageOutput').style.display = 'block';
-    
-    // Re-enable generate button
-    const generateBtn = document.getElementById('generateBtn');
-    generateBtn.disabled = false;
-    generateBtn.textContent = '🎨 Generate Image';
-}
-
-// Generate image
+// Process text with different operations - UPDATE THIS FUNCTION
 async function generateImage() {
     const inputText = document.getElementById('inputText').value.trim();
     
@@ -68,6 +13,8 @@ async function generateImage() {
     showLoading();
 
     try {
+        console.log('Sending request to generate image...');
+        
         const response = await fetch('/api/generate-image', {
             method: 'POST',
             headers: {
@@ -79,86 +26,69 @@ async function generateImage() {
             })
         });
 
+        console.log('Response status:', response.status);
+
         if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            throw new Error(`Server error: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
+        console.log('Response data:', data);
         
         if (data.imageUrl) {
-            displayImage(data.imageUrl);
+            console.log('Displaying image:', data.imageUrl.substring(0, 100) + '...');
+            displayImage(data.imageUrl, data.source);
         } else {
-            throw new Error('No image URL received');
+            console.error('No image URL in response:', data);
+            throw new Error('No image URL received from server');
         }
 
     } catch (error) {
         console.error('Error generating image:', error);
         
-        // Show demo placeholder
-        displayDemoImage();
+        // Show detailed error message
+        document.getElementById('imageOutput').innerHTML = `
+            <div style="color: #e74c3c; padding: 20px; background: #ffeaa7; border-radius: 8px;">
+                <strong>⚠️ Generation Error</strong><br>
+                ${error.message}<br><br>
+                <strong>Troubleshooting:</strong><br>
+                • Check if Hugging Face API key is set<br>
+                • Try a simpler prompt<br>
+                • Check browser console for details<br><br>
+                <em>Falling back to demo mode...</em>
+            </div>
+        `;
+        
+        // Still show demo image
+        setTimeout(() => {
+            displayDemoImage();
+        }, 2000);
     }
 
     hideLoading();
 }
 
-// Display generated image
-function displayImage(imageUrl) {
+// Add this function to your script.js
+function displayImage(imageUrl, source = 'AI') {
     currentImageUrl = imageUrl;
     
-    document.getElementById('imageOutput').innerHTML = `
-        <img src="${imageUrl}" alt="Generated image" class="generated-image" onload="this.style.opacity=1" style="opacity:0; transition: opacity 0.5s ease;">
-    `;
-    
-    document.getElementById('imageActions').style.display = 'flex';
-}
-
-// Display demo image when API fails
-function displayDemoImage() {
-    const demoImages = [
-        'https://via.placeholder.com/512x512/667eea/ffffff?text=🎨+AI+Generated+Image',
-        'https://via.placeholder.com/512x512/764ba2/ffffff?text=🖼️+Demo+Image',
-        'https://via.placeholder.com/512x512/4facfe/ffffff?text=✨+Sample+Output'
-    ];
-    
-    const randomImage = demoImages[Math.floor(Math.random() * demoImages.length)];
+    console.log('Attempting to display image...');
     
     document.getElementById('imageOutput').innerHTML = `
-        <img src="${randomImage}" alt="Demo image" class="generated-image">
-        <div style="color: #e74c3c; padding: 15px; background: #ffeaa7; border-radius: 8px; margin-top: 15px;">
-            <strong>📝 Demo Mode</strong><br>
-            API temporarily unavailable. This is a placeholder image.<br>
-            <em>Your prompt: "${currentPrompt}"</em>
+        <img src="${imageUrl}" alt="Generated image" class="generated-image" 
+             onload="console.log('Image loaded successfully'); this.style.opacity=1" 
+             onerror="console.error('Image failed to load'); this.style.display='none'; this.nextElementSibling.style.display='block'"
+             style="opacity:0; transition: opacity 0.5s ease;">
+        <div style="display: none; color: #e74c3c; padding: 15px; background: #ffeaa7; border-radius: 8px;">
+            <strong>Image Load Error</strong><br>
+            The generated image could not be displayed. This might be a temporary issue.
+        </div>
+        <div style="font-size: 0.9em; color: #666; margin-top: 10px;">
+            ✨ Generated with: ${source}
         </div>
     `;
     
     document.getElementById('imageActions').style.display = 'flex';
-    currentImageUrl = randomImage;
 }
-
-// Download image
-function downloadImage() {
-    if (!currentImageUrl) return;
-    
-    const link = document.createElement('a');
-    link.href = currentImageUrl;
-    link.download = `ai-generated-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-}
-
-// Regenerate image
-function regenerateImage() {
-    if (currentPrompt) {
-        generateImage();
-    }
-}
-
-// Auto-resize textarea
-document.addEventListener('DOMContentLoaded', function() {
-    const textarea = document.getElementById('inputText');
-    textarea.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = this.scrollHeight + 'px';
-    });
-});
