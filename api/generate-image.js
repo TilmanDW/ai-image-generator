@@ -63,29 +63,43 @@ export default async function handler(req, res) {
     }
 }
 
-// Replace the generateWithHuggingFace function with this simpler version
-async function generateWithHuggingFace(prompt, settings, modelId = 'runwayml/stable-diffusion-v1-5') {
-    const response = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
+async function generateWithStableDiffusion(prompt, settings) {
+    // Enhance prompt for better results
+    const enhancedPrompt = `${prompt}, high quality, detailed, professional, 8k resolution, masterpiece`;
+
+    const response = await fetch('https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0', {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+            'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-            inputs: prompt
+            inputs: enhancedPrompt,
+            parameters: {
+                width: settings.width,
+                height: settings.height,
+                num_inference_steps: 30,
+                guidance_scale: 7.5,
+                negative_prompt: "blurry, low quality, distorted, deformed, ugly, bad anatomy, bad hands, text, watermark"
+            },
+            options: {
+                wait_for_model: true,
+                use_cache: false
+            }
         })
     });
 
     if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Stable Diffusion API error: ${response.status} - ${errorText}`);
     }
 
-    const imageBlob = await response.blob();
+    // The response is a binary image
+    const imageBuffer = await response.arrayBuffer();
     
-    // Convert blob to base64
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(imageBlob);
-    });
+    // Convert to base64 data URL
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    const dataUrl = `data:image/png;base64,${base64Image}`;
+    
+    return dataUrl;
 }
