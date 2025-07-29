@@ -23,22 +23,20 @@ export default async function handler(req, res) {
 
         console.log('Generating image for prompt:', prompt);
 
-        // Working Stable Diffusion models on HF
+        // Working models
         const models = [
             'runwayml/stable-diffusion-v1-5',
-            'stabilityai/stable-diffusion-2-1',
-            'CompVis/stable-diffusion-v1-4',
-            'prompthero/openjourney'
+            'CompVis/stable-diffusion-v1-4'
         ];
 
         if (process.env.HUGGINGFACE_API_KEY) {
             for (const model of models) {
                 try {
                     console.log(`Trying model: ${model}`);
-                    const imageUrl = await generateImageWithModel(prompt, model);
+                    const result = await generateImageWithModel(prompt, model);
                     console.log('Successfully generated image');
                     return res.status(200).json({ 
-                        imageUrl: imageUrl,
+                        imageUrl: result,
                         prompt: prompt,
                         quality: quality,
                         source: `Hugging Face (${model.split('/')[1]})`
@@ -50,21 +48,20 @@ export default async function handler(req, res) {
             }
         }
 
-        // Fallback to enhanced demo
-        console.log('All models failed or no API key, using demo mode');
-        const demoImageUrl = await createEnhancedDemo(prompt, quality);
+        // Fallback demo
+        console.log('Using demo mode');
+        const demoImageUrl = createEnhancedDemo(prompt, quality);
         
         res.status(200).json({ 
             imageUrl: demoImageUrl,
             prompt: prompt,
             quality: quality,
-            source: 'Enhanced Demo Mode',
-            message: 'Demo mode active - real AI generation will work once API issues are resolved'
+            source: 'Demo Mode'
         });
 
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ error: 'Internal server error', details: error.message });
+        res.status(500).json({ error: 'Internal server error' });
     }
 }
 
@@ -72,7 +69,6 @@ async function generateImageWithModel(prompt, modelId) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     
     console.log(`Calling model: ${modelId}`);
-    console.log(`Prompt: ${prompt}`);
 
     const response = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
         method: 'POST',
@@ -82,10 +78,6 @@ async function generateImageWithModel(prompt, modelId) {
         },
         body: JSON.stringify({
             inputs: prompt,
-            parameters: {
-                guidance_scale: 7.5,
-                num_inference_steps: 20
-            },
             options: {
                 wait_for_model: true,
                 use_cache: false
@@ -94,72 +86,49 @@ async function generateImageWithModel(prompt, modelId) {
     });
 
     console.log(`Response status: ${response.status}`);
-    console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
+        // Read response body only once
         const errorText = await response.text();
-        console.log('Error response:', errorText);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
 
     const contentType = response.headers.get('content-type');
     console.log('Content type:', contentType);
 
-    // Handle different response types
+    // Read body only once based on content type
     if (contentType && contentType.includes('application/json')) {
         const jsonData = await response.json();
-        console.log('JSON response:', jsonData);
-        
         if (jsonData.error) {
             throw new Error(`API Error: ${jsonData.error}`);
         }
-        
-        // Some models return base64 in JSON
-        if (jsonData.images && jsonData.images[0]) {
-            return `data:image/png;base64,${jsonData.images[0]}`;
-        }
-        
-        throw new Error('Unexpected JSON response format');
+        throw new Error('Unexpected JSON response - expected image');
     }
 
     // Handle binary image response
-    if (contentType && contentType.startsWith('image/')) {
-        const imageBuffer = await response.arrayBuffer();
-        console.log('Image buffer size:', imageBuffer.byteLength);
-        
-        if (imageBuffer.byteLength === 0) {
-            throw new Error('Received empty image');
-        }
-        
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
-        return `data:${contentType};base64,${base64Image}`;
+    const imageBuffer = await response.arrayBuffer();
+    console.log('Image buffer size:', imageBuffer.byteLength);
+    
+    if (imageBuffer.byteLength === 0) {
+        throw new Error('Received empty image');
     }
-
-    throw new Error(`Unexpected content type: ${contentType}`);
+    
+    const base64Image = Buffer.from(imageBuffer).toString('base64');
+    return `data:image/png;base64,${base64Image}`;
 }
 
-async function createEnhancedDemo(prompt, quality) {
+function createEnhancedDemo(prompt, quality) {
     const sizes = { fast: 512, standard: 768, high: 1024 };
     const size = sizes[quality] || 768;
     
-    // Create contextual demo images using different services
-    let imageUrl;
-    
+    // Create contextual demo images
     if (prompt.toLowerCase().includes('cat')) {
-        // Use a cat image service
-        imageUrl = `https://cataas.com/cat/says/${encodeURIComponent('AI Generated')}?width=${size}&height=${size}&c=white&s=50`;
-    } else if (prompt.toLowerCase().includes('van gogh') || prompt.toLowerCase().includes('art')) {
-        // Use an art-style placeholder
-        imageUrl = `https://via.placeholder.com/${size}x${size}/f39c12/ffffff?text=🎨+Van+Gogh+Style`;
+        return `https://cataas.com/cat/says/AI%20Generated?width=${size}&height=${size}&c=white&s=30`;
+    } else if (prompt.toLowerCase().includes('van gogh')) {
+        return `https://via.placeholder.com/${size}x${size}/f39c12/ffffff?text=🎨+Van+Gogh+Style+Demo`;
     } else if (prompt.toLowerCase().includes('pope') || prompt.toLowerCase().includes('dalai')) {
-        // Peaceful/spiritual themed
-        imageUrl = `https://via.placeholder.com/${size}x${size}/9b59b6/ffffff?text=🕊️+Peaceful+Scene`;
+        return `https://via.placeholder.com/${size}x${size}/9b59b6/ffffff?text=🕊️+Peaceful+Demo`;
     } else {
-        // Generic AI art placeholder
-        const colors = ['667eea', '764ba2', '4facfe', 'f093fb'];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        imageUrl = `https://via.placeholder.com/${size}x${size}/${color}/ffffff?text=🎨+AI+Generated`;
+        return `https://via.placeholder.com/${size}x${size}/667eea/ffffff?text=🎨+AI+Demo+Image`;
     }
-    
-    return imageUrl;
 }
