@@ -1,168 +1,199 @@
-// Example prompts
-const examples = {
-    1: "Deutsche Welle logo in the artistic style of Vincent van Gogh, with swirling brushstrokes, vibrant blues and yellows, post-impressionist technique, oil painting texture, professional logo design with Van Gogh's characteristic bold colors and dynamic movement",
-    2: "A cute orange tabby cat wearing protective gear, rollerblading down Kurfürstendamm in Berlin, sunny day, German architecture in background, Kaiser Wilhelm Memorial Church visible, people watching and cheering, dynamic action shot, photorealistic style",
-    3: "The Pope and the Dalai Lama sitting together peacefully having tea at a small wooden table on top of a snow-covered Himalayan mountain peak, prayer flags fluttering in the wind, breathtaking mountain vista, golden hour lighting, serene and spiritual atmosphere, photorealistic"
+// Language translations
+const translations = {
+    de: {
+        mainTitle: "KI Bildgenerator Demo",
+        subtitle: "Erleben Sie die Kraft der Künstlichen Intelligenz bei der Bilderzeugung",
+        inputLabel: "Beschreiben Sie das Bild, das Sie erstellen möchten:",
+        placeholder: "z.B. Ein majestätischer Löwe in einer afrikanischen Savanne bei Sonnenuntergang...",
+        demoTitle: "Oder probieren Sie diese Beispiele:",
+        demo1: "Deutsche Welle Logo im Van Gogh Stil",
+        demo2: "Katze auf Rollschuhen am Kurfürstendamm",
+        demo3: "Papst und Dalai Lama beim Tee im Himalaya",
+        btnText: "Bild Generieren",
+        btnGenerating: "Wird generiert...",
+        resultTitle: "Generiertes Bild:",
+        downloadText: "Bild herunterladen",
+        errorTitle: "Fehler",
+        footerText: "Powered by Hugging Face AI | Demo-Website für Bildgenerierung"
+    },
+    en: {
+        mainTitle: "AI Image Generator Demo",
+        subtitle: "Experience the power of Artificial Intelligence in image generation",
+        inputLabel: "Describe the image you want to create:",
+        placeholder: "e.g. A majestic lion in an African savanna at sunset...",
+        demoTitle: "Or try these examples:",
+        demo1: "Deutsche Welle Logo in Van Gogh Style",
+        demo2: "Cat on Roller Skates at Kurfürstendamm",
+        demo3: "Pope and Dalai Lama Having Tea in Himalaya",
+        btnText: "Generate Image",
+        btnGenerating: "Generating...",
+        resultTitle: "Generated Image:",
+        downloadText: "Download Image",
+        errorTitle: "Error",
+        footerText: "Powered by Hugging Face AI | Demo Website for Image Generation"
+    }
 };
 
-let currentImageUrl = null;
-let currentPrompt = null;
+let currentLang = 'de';
 
-// Load example text
-function loadExample(exampleNum) {
-    const inputText = document.getElementById('inputText');
-    inputText.value = examples[exampleNum];
-    inputText.style.height = 'auto';
-    inputText.style.height = inputText.scrollHeight + 'px';
-}
+// DOM Elements
+const elements = {
+    langDe: document.getElementById('lang-de'),
+    langEn: document.getElementById('lang-en'),
+    promptInput: document.getElementById('prompt-input'),
+    generateBtn: document.getElementById('generate-btn'),
+    btnText: document.getElementById('btn-text'),
+    loadingSpinner: document.getElementById('loading-spinner'),
+    resultContainer: document.getElementById('result-container'),
+    errorContainer: document.getElementById('error-container'),
+    generatedImage: document.getElementById('generated-image'),
+    downloadBtn: document.getElementById('download-btn'),
+    errorMessage: document.getElementById('error-message')
+};
 
-// Clear text
-function clearText() {
-    document.getElementById('inputText').value = '';
-    document.getElementById('imageOutput').innerHTML = `
-        <div class="placeholder-image">
-            <span>🎨</span>
-            <p>Your generated image will appear here</p>
-        </div>
-    `;
-    document.getElementById('imageActions').style.display = 'none';
-    currentImageUrl = null;
-    currentPrompt = null;
-}
+// Initialize the application
+document.addEventListener('DOMContentLoaded', function() {
+    setupEventListeners();
+    updateLanguage();
+});
 
-// Show loading state
-function showLoading() {
-    document.getElementById('loadingSpinner').style.display = 'flex';
-    document.getElementById('imageOutput').style.display = 'none';
-    document.getElementById('imageActions').style.display = 'none';
+function setupEventListeners() {
+    // Language toggle
+    elements.langDe.addEventListener('click', () => switchLanguage('de'));
+    elements.langEn.addEventListener('click', () => switchLanguage('en'));
     
-    // Disable generate button
-    const generateBtn = document.getElementById('generateBtn');
-    generateBtn.disabled = true;
-    generateBtn.textContent = '🎨 Generating...';
-}
-
-// Hide loading state
-function hideLoading() {
-    document.getElementById('loadingSpinner').style.display = 'none';
-    document.getElementById('imageOutput').style.display = 'block';
+    // Demo buttons
+    document.querySelectorAll('.demo-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const prompt = this.dataset.prompt;
+            elements.promptInput.value = prompt;
+            elements.promptInput.focus();
+        });
+    });
     
-    // Re-enable generate button
-    const generateBtn = document.getElementById('generateBtn');
-    generateBtn.disabled = false;
-    generateBtn.textContent = '🎨 Generate Image';
+    // Generate button
+    elements.generateBtn.addEventListener('click', generateImage);
+    
+    // Download button
+    elements.downloadBtn.addEventListener('click', downloadImage);
+    
+    // Enter key in textarea
+    elements.promptInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && e.ctrlKey) {
+            generateImage();
+        }
+    });
 }
 
-// Replace the generateImage function with this version
+function switchLanguage(lang) {
+    currentLang = lang;
+    
+    // Update active button
+    elements.langDe.classList.toggle('active', lang === 'de');
+    elements.langEn.classList.toggle('active', lang === 'en');
+    
+    updateLanguage();
+}
+
+function updateLanguage() {
+    const t = translations[currentLang];
+    
+    // Update all text elements
+    document.getElementById('main-title').textContent = t.mainTitle;
+    document.getElementById('subtitle').textContent = t.subtitle;
+    document.getElementById('input-label').textContent = t.inputLabel;
+    document.getElementById('demo-title').textContent = t.demoTitle;
+    document.getElementById('demo1').textContent = t.demo1;
+    document.getElementById('demo2').textContent = t.demo2;
+    document.getElementById('demo3').textContent = t.demo3;
+    document.getElementById('btn-text').textContent = t.btnText;
+    document.getElementById('result-title').textContent = t.resultTitle;
+    document.getElementById('download-text').textContent = t.downloadText;
+    document.getElementById('error-title').textContent = t.errorTitle;
+    document.getElementById('footer-text').textContent = t.footerText;
+    
+    elements.promptInput.placeholder = t.placeholder;
+    document.documentElement.lang = currentLang;
+}
+
 async function generateImage() {
-    const inputText = document.getElementById('inputText').value.trim();
+    const prompt = elements.promptInput.value.trim();
     
-    if (!inputText) {
-        alert('Please describe the image you want to create!');
+    if (!prompt) {
+        showError(currentLang === 'de' ? 
+            'Bitte geben Sie eine Bildbeschreibung ein.' : 
+            'Please enter an image description.');
         return;
     }
-
-    const quality = document.getElementById('qualitySelect').value;
-    currentPrompt = inputText;
-
-    showLoading();
-
+    
+    // Show loading state
+    setLoadingState(true);
+    hideResults();
+    
     try {
-        console.log('Sending request to generate image...');
-        
-        // Try the simple working version first
-        const response = await fetch('/api/simple-working', {
+        const response = await fetch('/api/generate', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                prompt: inputText,
-                quality: quality
-            })
+            body: JSON.stringify({ prompt: prompt })
         });
-
-        console.log('Response status:', response.status);
-
-        if (!response.ok) {
-            throw new Error(`Server error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        console.log('Response data:', data);
         
-        if (data.imageUrl) {
-            displayImage(data.imageUrl, data.source);
-        } else {
-            throw new Error('No image URL received');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
-
+        
+        const blob = await response.blob();
+        const imageUrl = URL.createObjectURL(blob);
+        
+        showResult(imageUrl);
+        
     } catch (error) {
         console.error('Error generating image:', error);
-        displayDemoImage();
+        showError(currentLang === 'de' ? 
+            'Fehler beim Generieren des Bildes. Bitte versuchen Sie es erneut.' : 
+            'Error generating image. Please try again.');
+    } finally {
+        setLoadingState(false);
     }
-
-    hideLoading();
 }
 
-// Display generated image
-function displayImage(imageUrl) {
-    currentImageUrl = imageUrl;
+function setLoadingState(loading) {
+    elements.generateBtn.disabled = loading;
+    elements.btnText.classList.toggle('hidden', loading);
+    elements.loadingSpinner.classList.toggle('hidden', !loading);
     
-    document.getElementById('imageOutput').innerHTML = `
-        <img src="${imageUrl}" alt="Generated image" class="generated-image" onload="this.style.opacity=1" style="opacity:0; transition: opacity 0.5s ease;">
-    `;
-    
-    document.getElementById('imageActions').style.display = 'flex';
+    if (loading) {
+        elements.btnText.textContent = translations[currentLang].btnGenerating;
+    } else {
+        elements.btnText.textContent = translations[currentLang].btnText;
+    }
 }
 
-// Display demo image when API fails
-function displayDemoImage() {
-    const demoImages = [
-        'https://via.placeholder.com/512x512/667eea/ffffff?text=🎨+AI+Generated+Image',
-        'https://via.placeholder.com/512x512/764ba2/ffffff?text=🖼️+Demo+Image',
-        'https://via.placeholder.com/512x512/4facfe/ffffff?text=✨+Sample+Output'
-    ];
-    
-    const randomImage = demoImages[Math.floor(Math.random() * demoImages.length)];
-    
-    document.getElementById('imageOutput').innerHTML = `
-        <img src="${randomImage}" alt="Demo image" class="generated-image">
-        <div style="color: #e74c3c; padding: 15px; background: #ffeaa7; border-radius: 8px; margin-top: 15px;">
-            <strong>📝 Demo Mode</strong><br>
-            API temporarily unavailable. This is a placeholder image.<br>
-            <em>Your prompt: "${currentPrompt}"</em>
-        </div>
-    `;
-    
-    document.getElementById('imageActions').style.display = 'flex';
-    currentImageUrl = randomImage;
+function showResult(imageUrl) {
+    elements.generatedImage.src = imageUrl;
+    elements.generatedImage.onload = function() {
+        elements.resultContainer.classList.remove('hidden');
+        elements.resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
 }
 
-// Download image
+function showError(message) {
+    elements.errorMessage.textContent = message;
+    elements.errorContainer.classList.remove('hidden');
+    elements.errorContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function hideResults() {
+    elements.resultContainer.classList.add('hidden');
+    elements.errorContainer.classList.add('hidden');
+}
+
 function downloadImage() {
-    if (!currentImageUrl) return;
-    
     const link = document.createElement('a');
-    link.href = currentImageUrl;
-    link.download = `ai-generated-${Date.now()}.png`;
+    link.href = elements.generatedImage.src;
+    link.download = `ai-generated-image-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 }
-
-// Regenerate image
-function regenerateImage() {
-    if (currentPrompt) {
-        generateImage();
-    }
-}
-
-// Auto-resize textarea
-document.addEventListener('DOMContentLoaded', function() {
-    const textarea = document.getElementById('inputText');
-    textarea.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = this.scrollHeight + 'px';
-    });
-});
