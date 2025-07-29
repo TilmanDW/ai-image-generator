@@ -22,59 +22,79 @@ export default async function handler(req, res) {
             startsWithHf: apiKey.startsWith('hf_')
         };
 
-        // Test 1: Simple text model (should work)
+        // Test 1: Simple text model
         console.log('Testing text model...');
-        const textResponse = await fetch('https://api-inference.huggingface.co/models/gpt2', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                inputs: "The quick brown fox",
-                parameters: { max_length: 50 }
-            })
-        });
-
-        const textStatus = textResponse.status;
-        let textData;
+        let textData, textStatus, textOk;
+        
         try {
-            textData = await textResponse.json();
-        } catch {
-            textData = { error: 'Could not parse response' };
+            const textResponse = await fetch('https://api-inference.huggingface.co/models/gpt2', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    inputs: "The quick brown fox",
+                    parameters: { max_length: 50 }
+                })
+            });
+
+            textStatus = textResponse.status;
+            textOk = textResponse.ok;
+            
+            // Read body only once based on content type
+            const contentType = textResponse.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                textData = await textResponse.json();
+            } else {
+                const textContent = await textResponse.text();
+                textData = { rawResponse: textContent.substring(0, 200) };
+            }
+        } catch (error) {
+            textData = { error: error.message };
+            textStatus = 0;
+            textOk = false;
         }
 
         // Test 2: Image model
         console.log('Testing image model...');
-        const imageResponse = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                inputs: "a red apple on a table"
-            })
-        });
+        let imageData, imageStatus, imageOk, imageContentType;
+        
+        try {
+            const imageResponse = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    inputs: "a red apple on a table"
+                })
+            });
 
-        const imageStatus = imageResponse.status;
-        const imageContentType = imageResponse.headers.get('content-type');
-        let imageData;
-
-        if (imageContentType && imageContentType.includes('image/')) {
-            const buffer = await imageResponse.arrayBuffer();
-            imageData = { 
-                type: 'binary_image', 
-                size: buffer.byteLength,
-                contentType: imageContentType
-            };
-        } else {
-            try {
+            imageStatus = imageResponse.status;
+            imageOk = imageResponse.ok;
+            imageContentType = imageResponse.headers.get('content-type');
+            
+            // Read body only once based on content type
+            if (imageContentType && imageContentType.startsWith('image/')) {
+                const buffer = await imageResponse.arrayBuffer();
+                imageData = { 
+                    type: 'binary_image', 
+                    size: buffer.byteLength,
+                    contentType: imageContentType,
+                    success: buffer.byteLength > 0
+                };
+            } else if (imageContentType && imageContentType.includes('application/json')) {
                 imageData = await imageResponse.json();
-            } catch {
-                const text = await imageResponse.text();
-                imageData = { rawResponse: text.substring(0, 200) };
+            } else {
+                const textContent = await imageResponse.text();
+                imageData = { rawResponse: textContent.substring(0, 200) };
             }
+        } catch (error) {
+            imageData = { error: error.message };
+            imageStatus = 0;
+            imageOk = false;
         }
 
         res.status(200).json({
@@ -82,12 +102,12 @@ export default async function handler(req, res) {
             tests: {
                 textModel: {
                     status: textStatus,
-                    ok: textResponse.ok,
+                    ok: textOk,
                     data: textData
                 },
                 imageModel: {
                     status: imageStatus,
-                    ok: imageResponse.ok,
+                    ok: imageOk,
                     contentType: imageContentType,
                     data: imageData
                 }
@@ -97,8 +117,7 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Test error:', error);
         res.status(500).json({ 
-            error: error.message,
-            stack: error.stack
+            error: error.message
         });
     }
 }
