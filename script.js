@@ -53,7 +53,7 @@ function hideLoading() {
     generateBtn.textContent = '🎨 Generate Image';
 }
 
-// Generate image
+// Replace the generateImage function with this version
 async function generateImage() {
     const inputText = document.getElementById('inputText').value.trim();
     
@@ -68,7 +68,10 @@ async function generateImage() {
     showLoading();
 
     try {
-        const response = await fetch('/api/generate-image', {
+        console.log('Sending request to generate image...');
+        
+        // Try the simple working version first
+        const response = await fetch('/api/simple-working', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -79,22 +82,23 @@ async function generateImage() {
             })
         });
 
+        console.log('Response status:', response.status);
+
         if (!response.ok) {
             throw new Error(`Server error: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log('Response data:', data);
         
         if (data.imageUrl) {
-            displayImage(data.imageUrl);
+            displayImage(data.imageUrl, data.source);
         } else {
             throw new Error('No image URL received');
         }
 
     } catch (error) {
         console.error('Error generating image:', error);
-        
-        // Show demo placeholder
         displayDemoImage();
     }
 
