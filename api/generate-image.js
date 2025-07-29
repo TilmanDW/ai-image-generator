@@ -1,17 +1,11 @@
 export default async function handler(req, res) {
-    // Enable CORS
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
         res.status(200).end();
         return;
-    }
-
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
     }
 
     try {
@@ -23,112 +17,161 @@ export default async function handler(req, res) {
 
         console.log('Generating image for prompt:', prompt);
 
-        // Working models
-        const models = [
-            'runwayml/stable-diffusion-v1-5',
-            'CompVis/stable-diffusion-v1-4'
-        ];
+        // Try multiple approaches in order
+        let result = null;
 
+        // Approach 1: Try HF if available
         if (process.env.HUGGINGFACE_API_KEY) {
-            for (const model of models) {
-                try {
-                    console.log(`Trying model: ${model}`);
-                    const result = await generateImageWithModel(prompt, model);
-                    console.log('Successfully generated image');
-                    return res.status(200).json({ 
+            try {
+                result = await tryHuggingFaceSimple(prompt);
+                if (result) {
+                    return res.json({
                         imageUrl: result,
-                        prompt: prompt,
-                        quality: quality,
-                        source: `Hugging Face (${model.split('/')[1]})`
+                        prompt,
+                        quality,
+                        source: 'Hugging Face AI',
+                        method: 'real_ai'
                     });
-                } catch (apiError) {
-                    console.log(`Model ${model} failed:`, apiError.message);
-                    continue;
                 }
+            } catch (hfError) {
+                console.log('HF failed:', hfError.message);
             }
         }
 
-        // Fallback demo
-        console.log('Using demo mode');
-        const demoImageUrl = createEnhancedDemo(prompt, quality);
+        // Approach 2: Try Replicate (free tier)
+        try {
+            result = await tryReplicateAlternative(prompt, quality);
+            if (result) {
+                return res.json({
+                    imageUrl: result,
+                    prompt,
+                    quality,
+                    source: 'Alternative AI Service',
+                    method: 'alternative_ai'
+                });
+            }
+        } catch (repError) {
+            console.log('Alternative AI failed:', repError.message);
+        }
+
+        // Approach 3: Smart contextual demo (always works)
+        result = createContextualDemo(prompt, quality);
         
-        res.status(200).json({ 
-            imageUrl: demoImageUrl,
-            prompt: prompt,
-            quality: quality,
-            source: 'Demo Mode'
+        res.json({
+            imageUrl: result,
+            prompt,
+            quality,
+            source: 'Contextual Demo',
+            method: 'smart_demo',
+            message: 'Using enhanced demo mode with contextual imagery'
         });
 
     } catch (error) {
         console.error('Error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: error.message });
     }
 }
 
-async function generateImageWithModel(prompt, modelId) {
+async function tryHuggingFaceSimple(prompt) {
     const apiKey = process.env.HUGGINGFACE_API_KEY;
     
-    console.log(`Calling model: ${modelId}`);
-
-    const response = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
+    // Try the most basic request possible
+    const response = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
+            'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            inputs: prompt,
-            options: {
-                wait_for_model: true,
-                use_cache: false
-            }
-        })
+        body: JSON.stringify({ inputs: prompt })
     });
 
-    console.log(`Response status: ${response.status}`);
+    if (response.status === 404) {
+        throw new Error('Model not found - might need license acceptance');
+    }
+
+    if (response.status === 403) {
+        throw new Error('Access forbidden - check token permissions');
+    }
 
     if (!response.ok) {
-        // Read response body only once
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        throw new Error(`API error ${response.status}: ${errorText}`);
     }
 
     const contentType = response.headers.get('content-type');
-    console.log('Content type:', contentType);
-
-    // Read body only once based on content type
-    if (contentType && contentType.includes('application/json')) {
-        const jsonData = await response.json();
-        if (jsonData.error) {
-            throw new Error(`API Error: ${jsonData.error}`);
+    if (contentType && contentType.startsWith('image/')) {
+        const buffer = await response.arrayBuffer();
+        if (buffer.byteLength > 0) {
+            return `data:image/png;base64,${Buffer.from(buffer).toString('base64')}`;
         }
-        throw new Error('Unexpected JSON response - expected image');
     }
 
-    // Handle binary image response
-    const imageBuffer = await response.arrayBuffer();
-    console.log('Image buffer size:', imageBuffer.byteLength);
-    
-    if (imageBuffer.byteLength === 0) {
-        throw new Error('Received empty image');
-    }
-    
-    const base64Image = Buffer.from(imageBuffer).toString('base64');
-    return `data:image/png;base64,${base64Image}`;
+    throw new Error('No valid image received');
 }
 
-function createEnhancedDemo(prompt, quality) {
+async function tryReplicateAlternative(prompt, quality) {
+    // For now, this is a placeholder for future Replicate integration
+    // Replicate has better free tier access but requires setup
+    throw new Error('Alternative service not configured');
+}
+
+function createContextualDemo(prompt, quality) {
     const sizes = { fast: 512, standard: 768, high: 1024 };
     const size = sizes[quality] || 768;
     
-    // Create contextual demo images
-    if (prompt.toLowerCase().includes('cat')) {
-        return `https://cataas.com/cat/says/AI%20Generated?width=${size}&height=${size}&c=white&s=30`;
-    } else if (prompt.toLowerCase().includes('van gogh')) {
-        return `https://via.placeholder.com/${size}x${size}/f39c12/ffffff?text=🎨+Van+Gogh+Style+Demo`;
-    } else if (prompt.toLowerCase().includes('pope') || prompt.toLowerCase().includes('dalai')) {
-        return `https://via.placeholder.com/${size}x${size}/9b59b6/ffffff?text=🕊️+Peaceful+Demo`;
-    } else {
-        return `https://via.placeholder.com/${size}x${size}/667eea/ffffff?text=🎨+AI+Demo+Image`;
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Deutsche Welle + Van Gogh
+    if (lowerPrompt.includes('deutsche welle') && lowerPrompt.includes('van gogh')) {
+        return createSVGImage(size, 'Deutsche Welle × Van Gogh', '🎨📺', ['#f39c12', '#3498db', '#2ecc71']);
     }
+    
+    // Cat rollerblading in Berlin
+    if (lowerPrompt.includes('cat') && (lowerPrompt.includes('rollerblade') || lowerPrompt.includes('berlin'))) {
+        return createSVGImage(size, 'Cat Rollerblading Berlin', '🐱⛸️🏙️', ['#ff6b6b', '#feca57', '#48dbfb']);
+    }
+    
+    // Pope & Dalai Lama
+    if ((lowerPrompt.includes('pope') || lowerPrompt.includes('dalai')) && lowerPrompt.includes('tea')) {
+        return createSVGImage(size, 'Peaceful Tea Time', '🕊️🍃⛰️', ['#9b59b6', '#3498db', '#1dd1a1']);
+    }
+    
+    // Van Gogh style
+    if (lowerPrompt.includes('van gogh')) {
+        return createSVGImage(size, 'Van Gogh Style', '🎨🌟', ['#f39c12', '#e74c3c', '#3498db']);
+    }
+    
+    // Cat
+    if (lowerPrompt.includes('cat')) {
+        return createSVGImage(size, 'Feline Friend', '🐱✨', ['#ff6b6b', '#feca57']);
+    }
+    
+    // Default artistic
+    return createSVGImage(size, 'AI Generated Art', '🎨🤖', ['#667eea', '#764ba2']);
+}
+
+function createSVGImage(size, title, emoji, colors) {
+    const gradient = colors.map((color, i) => 
+        `<stop offset="${i * (100/(colors.length-1))}%" style="stop-color:${color};stop-opacity:1" />`
+    ).join('');
+    
+    const svg = `
+    <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                ${gradient}
+            </linearGradient>
+            <filter id="blur">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="3"/>
+            </filter>
+        </defs>
+        <rect width="${size}" height="${size}" fill="url(#bg)"/>
+        <circle cx="${size*0.3}" cy="${size*0.3}" r="${size*0.1}" fill="rgba(255,255,255,0.2)" filter="url(#blur)"/>
+        <circle cx="${size*0.7}" cy="${size*0.6}" r="${size*0.15}" fill="rgba(255,255,255,0.1)" filter="url(#blur)"/>
+        <text x="${size/2}" y="${size/2-40}" font-family="Arial, sans-serif" font-size="${size*0.08}" fill="white" text-anchor="middle" font-weight="bold">${emoji}</text>
+        <text x="${size/2}" y="${size/2+20}" font-family="Arial, sans-serif" font-size="${size*0.04}" fill="rgba(255,255,255,0.9)" text-anchor="middle">${title}</text>
+        <text x="${size/2}" y="${size/2+50}" font-family="Arial, sans-serif" font-size="${size*0.025}" fill="rgba(255,255,255,0.7)" text-anchor="middle">AI Demo Mode</text>
+    </svg>`;
+    
+    return `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
 }
