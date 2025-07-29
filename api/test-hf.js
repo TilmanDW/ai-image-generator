@@ -15,51 +15,82 @@ export default async function handler(req, res) {
             });
         }
 
-        // Check token format
         const tokenInfo = {
             hasKey: true,
             tokenPrefix: apiKey.substring(0, 10),
             tokenLength: apiKey.length,
-            startsWithHf: apiKey.startsWith('hf_'),
-            tokenFormat: apiKey.startsWith('hf_') ? 'correct' : 'incorrect - should start with hf_'
+            startsWithHf: apiKey.startsWith('hf_')
         };
 
-        console.log('Token info:', tokenInfo);
-
-        // Test with the simplest possible request
-        const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
+        // Test 1: Simple text model (should work)
+        console.log('Testing text model...');
+        const textResponse = await fetch('https://api-inference.huggingface.co/models/gpt2', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                inputs: "Hello"
+                inputs: "The quick brown fox",
+                parameters: { max_length: 50 }
             })
         });
 
-        const status = response.status;
-        const statusText = response.statusText;
-        let responseData;
-
+        const textStatus = textResponse.status;
+        let textData;
         try {
-            const responseText = await response.text();
+            textData = await textResponse.json();
+        } catch {
+            textData = { error: 'Could not parse response' };
+        }
+
+        // Test 2: Image model
+        console.log('Testing image model...');
+        const imageResponse = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                inputs: "a red apple on a table"
+            })
+        });
+
+        const imageStatus = imageResponse.status;
+        const imageContentType = imageResponse.headers.get('content-type');
+        let imageData;
+
+        if (imageContentType && imageContentType.includes('image/')) {
+            const buffer = await imageResponse.arrayBuffer();
+            imageData = { 
+                type: 'binary_image', 
+                size: buffer.byteLength,
+                contentType: imageContentType
+            };
+        } else {
             try {
-                responseData = JSON.parse(responseText);
+                imageData = await imageResponse.json();
             } catch {
-                responseData = { rawResponse: responseText.substring(0, 500) };
+                const text = await imageResponse.text();
+                imageData = { rawResponse: text.substring(0, 200) };
             }
-        } catch (e) {
-            responseData = { error: 'Could not read response' };
         }
 
         res.status(200).json({
             tokenInfo,
-            testResponse: {
-                ok: response.ok,
-                status: status,
-                statusText: statusText,
-                data: responseData
+            tests: {
+                textModel: {
+                    status: textStatus,
+                    ok: textResponse.ok,
+                    data: textData
+                },
+                imageModel: {
+                    status: imageStatus,
+                    ok: imageResponse.ok,
+                    contentType: imageContentType,
+                    data: imageData
+                }
             }
         });
 
