@@ -6,53 +6,59 @@ export default async function handler(req, res) {
     try {
         console.log('Testing Hugging Face API...');
         
-        if (!process.env.HUGGINGFACE_API_KEY) {
+        const apiKey = process.env.HUGGINGFACE_API_KEY;
+        
+        if (!apiKey) {
             return res.status(500).json({ 
                 error: 'No API key found',
                 hasKey: false 
             });
         }
 
-        // Test with a simple model first
-        const response = await fetch('https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5', {
+        // Check token format
+        const tokenInfo = {
+            hasKey: true,
+            tokenPrefix: apiKey.substring(0, 10),
+            tokenLength: apiKey.length,
+            startsWithHf: apiKey.startsWith('hf_'),
+            tokenFormat: apiKey.startsWith('hf_') ? 'correct' : 'incorrect - should start with hf_'
+        };
+
+        console.log('Token info:', tokenInfo);
+
+        // Test with the simplest possible request
+        const response = await fetch('https://api-inference.huggingface.co/models/microsoft/DialoGPT-medium', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                inputs: "a simple red apple",
-                options: {
-                    wait_for_model: true
-                }
+                inputs: "Hello"
             })
         });
 
-        const isOk = response.ok;
         const status = response.status;
+        const statusText = response.statusText;
         let responseData;
 
         try {
-            if (response.headers.get('content-type')?.includes('application/json')) {
-                responseData = await response.json();
-            } else {
-                const buffer = await response.arrayBuffer();
-                responseData = { 
-                    type: 'binary', 
-                    size: buffer.byteLength,
-                    contentType: response.headers.get('content-type')
-                };
+            const responseText = await response.text();
+            try {
+                responseData = JSON.parse(responseText);
+            } catch {
+                responseData = { rawResponse: responseText.substring(0, 500) };
             }
         } catch (e) {
-            responseData = { error: 'Could not parse response' };
+            responseData = { error: 'Could not read response' };
         }
 
         res.status(200).json({
-            hasKey: true,
-            apiKeyPrefix: process.env.HUGGINGFACE_API_KEY.substring(0, 7) + '...',
+            tokenInfo,
             testResponse: {
-                ok: isOk,
+                ok: response.ok,
                 status: status,
+                statusText: statusText,
                 data: responseData
             }
         });
@@ -61,7 +67,7 @@ export default async function handler(req, res) {
         console.error('Test error:', error);
         res.status(500).json({ 
             error: error.message,
-            hasKey: !!process.env.HUGGINGFACE_API_KEY
+            stack: error.stack
         });
     }
 }
